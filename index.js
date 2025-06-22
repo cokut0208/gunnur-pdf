@@ -70,27 +70,29 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{remainingAmount}}', formatLira(order.remaining_amount));
         html = html.replace('{{remainingPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method);
 
-        // --- HATA DÜZELTMESİ BURADA ---
+        // HATA DÜZELTMESİ VE İSTENEN MANTIK BURADA
         // Veritabanından gelen 'details' JSON metnini okuyup verileri ayıklıyoruz.
         const itemsHtml = orderItems.map(item => {
             const product = item.product || {};
             
-            // Güvenli veri okuma için varsayılan değerler
             let variantInfo = 'Standart';
             let chassis_number = 'N/A';
 
-            // 'details' alanı varsa ve string ise, onu parse et
+            // 'details' alanı varsa ve string ise, onu JSON olarak aç ve içini oku
             if (item.details && typeof item.details === 'string') {
                 try {
                     const detailsData = JSON.parse(item.details);
-                    const sv = detailsData.selectedVariant || {}; // selectedVariant objesini al
-                    chassis_number = detailsData.chassis_number || 'N/A'; // chassis_number'ı al
+                    const sv = detailsData.selectedVariant || {};
                     
-                    // Renk ve Yıl bilgilerini birleştir
+                    chassis_number = detailsData.chassis_number || 'N/A';
+                    
+                    // Renk ve Yıl bilgilerini birleştir. filter(Boolean) boş olanları atar.
                     variantInfo = [sv.color, sv.modelYear].filter(Boolean).join(' / ') || 'Standart';
                 } catch (e) {
                     console.error('Sipariş kalemi "details" alanı parse edilemedi:', item.details);
                 }
+            } else if (item.chassis_number) {
+                 chassis_number = item.chassis_number;
             }
 
             return `
@@ -120,14 +122,38 @@ app.post('/api/generate/order', async (req, res) => {
 });
 
 
-// GÜN SONU RAPORU API YOLU (Bu kod aynı kalabilir)
+// GÜN SONU RAPORU API YOLU (Bu kodda değişiklik yok)
 app.post('/api/generate/day-end', async (req, res) => {
     try {
         const { report } = req.body;
         let html = fs.readFileSync(path.join(__dirname, 'day-end-template.html'), 'utf-8');
         const formatLira = (amount) => (amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
-        // ... (Veri doldurma kısımları aynı)
         
+        // GÜN SONU VERİLERİNİ DOLDURMA KISMI
+        html = html.replace('{{cashierName}}', report.cashier.name || '');
+        html = html.replace('{{targetCashierName}}', report.targetCashier?.name || 'Merkez');
+        html = html.replace('{{reportDate}}', new Date(report.date).toLocaleDateString('tr-TR'));
+        html = html.replace('{{openingBalance}}', formatLira(report.openingBalance));
+        html = html.replace('{{netAmount}}', formatLira(report.netAmount));
+        html = html.replace('{{transferredAmount}}', formatLira(report.transferredAmount));
+        html = html.replace('{{closingBalance}}', formatLira(report.closingBalance));
+        html = html.replace('{{totalIncome}}', formatLira(report.totalIncome));
+        html = html.replace('{{cashIncome}}', formatLira(report.cashTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)));
+        html = html.replace('{{cardIncome}}', formatLira(report.cardTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)));
+        html = html.replace('{{transferIncome}}', formatLira(report.transferTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)));
+        html = html.replace('{{totalExpense}}', formatLira(report.totalExpense));
+        html = html.replace('{{cashExpense}}', formatLira(report.cashTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)));
+        html = html.replace('{{cardExpense}}', formatLira(report.cardTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)));
+        html = html.replace('{{transferExpense}}', formatLira(report.transferTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)));
+        const totalTransactions = report.cashTransactions.length + report.cardTransactions.length + report.transferTransactions.length;
+        const avgTransactionAmount = totalTransactions > 0 ? (report.totalIncome + report.totalExpense) / totalTransactions : 0;
+        const maxIncome = Math.max(...[...report.cashTransactions, ...report.cardTransactions, ...report.transferTransactions].filter(t => t.type === 'income').map(t => t.amount), 0);
+        html = html.replace('{{totalTransactions}}', totalTransactions);
+        html = html.replace('{{orderCount}}', report.orderCount);
+        html = html.replace('{{avgTransactionAmount}}', formatLira(avgTransactionAmount));
+        html = html.replace('{{maxIncome}}', formatLira(maxIncome));
+        html = html.replace('{{generationDate}}', new Date().toLocaleString('tr-TR'));
+
         const pdfBuffer = await createPdfFromHtml(html);
         res.set({ 'Content-Type': 'application/pdf', 'Content-Length': pdfBuffer.length }).send(pdfBuffer);
     } catch (error) {
@@ -140,4 +166,3 @@ app.post('/api/generate/day-end', async (req, res) => {
 app.listen(port, () => {
     console.log(`PDF servisi http://localhost:${port} adresinde çalışıyor`);
 });
-
