@@ -75,37 +75,34 @@ app.post('/api/generate/order', async (req, res) => {
         const itemsHtml = orderItems.map(item => {
             const product = item.product || {};
             
-            let variantInfo = 'Standart';
-            let chassis_number = 'N/A';
-
-            // 'details' alanı varsa ve string ise, onu JSON olarak aç ve içini oku
+            let color = '-';
+            let modelYear = '-';
+            let chassis_number = item.chassis_number || 'N/A';
+        
             if (item.details && typeof item.details === 'string') {
                 try {
                     const detailsData = JSON.parse(item.details);
                     const sv = detailsData.selectedVariant || {};
-                    
-                    chassis_number = detailsData.chassis_number || 'N/A';
-                    
-                    // Renk ve Yıl bilgilerini birleştir. filter(Boolean) boş olanları atar.
-                    variantInfo = [sv.color, sv.modelYear].filter(Boolean).join(' / ') || 'Standart';
+                    if (sv.color) color = sv.color;
+                    if (sv.modelYear) modelYear = sv.modelYear;
+                    if (detailsData.chassis_number) chassis_number = detailsData.chassis_number;
                 } catch (e) {
-                    console.error('Sipariş kalemi "details" alanı parse edilemedi:', item.details);
+                    console.error('details parse edilemedi:', item.details);
                 }
-            } else if (item.chassis_number) {
-                 chassis_number = item.chassis_number;
             }
-
+        
             return `
                 <tr>
                     <td>${product.name || ''} ${product.model || ''}</td>
-                    <td>${variantInfo}</td>
+                    <td>${color}</td>
+                    <td>${modelYear}</td>
                     <td>${chassis_number}</td>
                     <td style="text-align:center;">${item.quantity}</td>
                     <td style="text-align:right;">₺${formatLira(item.unit_price)}</td>
                     <td style="text-align:right;">₺${formatLira(item.total_price)}</td>
                 </tr>
             `;
-        }).join('');
+        }).join('');        
         html = html.replace('{{orderItems}}', itemsHtml);
 
         // Ödeme Özeti
