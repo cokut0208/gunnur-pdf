@@ -43,7 +43,7 @@ const createPdfFromHtml = async (htmlContent) => {
 };
 
 // ==============================================================================
-// API YOLU 1: SİPARİŞ FORMU OLUŞTURMA (/api/generate/order) - GÜNCELLENDİ
+// API YOLU 1: SİPARİŞ FORMU OLUŞTURMA (/api/generate/order) - SON DÜZELTİLMİŞ HALİ
 // ==============================================================================
 app.post('/api/generate/order', async (req, res) => {
     try {
@@ -54,7 +54,7 @@ app.post('/api/generate/order', async (req, res) => {
         const paymentMethods = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale', installment: 'Taksitli', credit: 'Kredili' };
         const statusLabels = { draft: 'Taslak', confirmed: 'Onaylandı', completed: 'Tamamlandı', cancelled: 'İptal' };
 
-        // === YENİ: İNDİRİM HESAPLAMALARI ===
+        // İNDİRİM HESAPLAMALARI
         const totalOriginalAmount = orderItems.reduce((sum, item) => sum + (item.original_price * item.quantity), 0);
         const totalDiscountAmount = orderItems.reduce((sum, item) => sum + (item.discount_amount * item.quantity), 0);
         
@@ -72,19 +72,19 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{downPaymentAmount}}', formatLira(order.paid_amount));
         html = html.replace('{{downPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method);
         html = html.replace('{{remainingAmount}}', formatLira(order.remaining_amount));
-        // NOT: Kalan tutar ödeme yöntemi için 'order' objesinde ayrı bir alan olmalı.
-        // Şimdilik peşinat yöntemiyle aynı kullanılıyor.
         html = html.replace('{{remainingPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method);
 
-        // === YENİ: ÜRÜN LİSTESİNİ İNDİRİM BİLGİSİYLE OLUŞTUR ===
+        // ÜRÜN LİSTESİNİ İNDİRİM BİLGİSİYLE OLUŞTUR
         const itemsHtml = orderItems.map(item => {
             const product = item.product || {};
-            const details = (item as any).details || {}; 
+            
+            // DÜZELTME: TypeScript'e özgü 'as' kaldırıldı. Bu satır artık standart JavaScript'tir.
+            const details = item.details || {}; 
+
             const color = details.selectedVariant?.color || '-';
             const modelYear = details.selectedVariant?.modelYear || '-';
             const chassis_number = details.chassis_number || 'N/A';
             
-            // İndirim uygulanmışsa, bunu belirtmek için ek bir satır oluştur
             const discountInfoHtml = item.discount_amount > 0 
                 ? `<br><span class="discount-text">(Orijinal Fiyat: ₺${formatLira(item.original_price)}, İndirim: -₺${formatLira(item.discount_amount)})</span>`
                 : '';
@@ -106,7 +106,7 @@ app.post('/api/generate/order', async (req, res) => {
         }).join('');
         html = html.replace('{{orderItems}}', itemsHtml);
 
-        // === YENİ: ÖDEME ÖZETİNİ İNDİRİM BİLGİSİYLE OLUŞTUR ===
+        // ÖDEME ÖZETİNİ İNDİRİM BİLGİSİYLE OLUŞTUR
         let discountSummaryHtml = '';
         if (totalDiscountAmount > 0) {
             discountSummaryHtml = `
