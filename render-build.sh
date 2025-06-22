@@ -3,4 +3,3 @@
 set -o errexit
 
 npm install
-npm install puppeteer --cache-dir /opt/render/.cache/puppeteer
