@@ -11,7 +11,7 @@ const port = 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// TEK TARAYICI YÖNETİMİ
+// Tek tarayıcı örneğini yönetmek için yardımcı fonksiyon
 let browserInstance = null;
 const getBrowserInstance = async () => {
     if (browserInstance && browserInstance.isConnected()) {
@@ -29,7 +29,7 @@ const getBrowserInstance = async () => {
     return browserInstance;
 };
 
-// PDF OLUŞTURMA İÇİN YARDIMCI FONKSİYON
+// HTML içeriğinden PDF oluşturmak için yardımcı fonksiyon
 const createPdfFromHtml = async (htmlContent) => {
     const browser = await getBrowserInstance();
     const page = await browser.newPage();
@@ -43,7 +43,7 @@ const createPdfFromHtml = async (htmlContent) => {
 };
 
 // ==============================================================================
-// API YOLU 1: SİPARİŞ FORMU OLUŞTURMA (/api/generate/order) - SON DÜZELTİLMİŞ HALİ
+// API YOLU: SİPARİŞ FORMU OLUŞTURMA
 // ==============================================================================
 app.post('/api/generate/order', async (req, res) => {
     try {
@@ -54,11 +54,11 @@ app.post('/api/generate/order', async (req, res) => {
         const paymentMethods = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale', installment: 'Taksitli', credit: 'Kredili' };
         const statusLabels = { draft: 'Taslak', confirmed: 'Onaylandı', completed: 'Tamamlandı', cancelled: 'İptal' };
 
-        // İNDİRİM HESAPLAMALARI
-        const totalOriginalAmount = orderItems.reduce((sum, item) => sum + (item.original_price * item.quantity), 0);
-        const totalDiscountAmount = orderItems.reduce((sum, item) => sum + (item.discount_amount * item.quantity), 0);
+        // İndirim ve orijinal tutar hesaplamaları
+        const totalOriginalAmount = orderItems.reduce((sum, item) => sum + ((item.original_price || 0) * (item.quantity || 1)), 0);
+        const totalDiscountAmount = orderItems.reduce((sum, item) => sum + ((item.discount_amount || 0) * (item.quantity || 1)), 0);
         
-        // ŞABLONDAKİ GENEL VERİLERİ DOLDUR
+        // Şablondaki genel verileri doldurma
         html = html.replace('{{logoBase64}}', logoBase64 || '');
         html = html.replace('{{orderId}}', order.id.slice(0, 8) || 'Bilinmiyor');
         html = html.replace('{{orderDate}}', new Date(order.order_date).toLocaleDateString('tr-TR'));
@@ -74,15 +74,14 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{remainingAmount}}', formatLira(order.remaining_amount));
         html = html.replace('{{remainingPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method);
 
-        // ÜRÜN LİSTESİNİ İNDİRİM BİLGİSİYLE OLUŞTUR
+        // Sipariş kalemleri için HTML oluşturma
         const itemsHtml = orderItems.map(item => {
             const product = item.product || {};
-            
-            // DÜZELTME: TypeScript'e özgü 'as' kaldırıldı. Bu satır artık standart JavaScript'tir.
-            const details = item.details || {}; 
+            const details = item.details || {};
+            const selectedVariant = details.selectedVariant || {};
 
-            const color = details.selectedVariant?.color || '-';
-            const modelYear = details.selectedVariant?.modelYear || '-';
+            const color = selectedVariant.color || '-';
+            const modelYear = selectedVariant.modelYear || '-';
             const chassis_number = details.chassis_number || 'N/A';
             
             const discountInfoHtml = item.discount_amount > 0 
@@ -106,7 +105,7 @@ app.post('/api/generate/order', async (req, res) => {
         }).join('');
         html = html.replace('{{orderItems}}', itemsHtml);
 
-        // ÖDEME ÖZETİNİ İNDİRİM BİLGİSİYLE OLUŞTUR
+        // Ödeme özeti için indirim HTML'ini oluşturma
         let discountSummaryHtml = '';
         if (totalDiscountAmount > 0) {
             discountSummaryHtml = `
@@ -122,7 +121,7 @@ app.post('/api/generate/order', async (req, res) => {
         }
         html = html.replace('{{discountSummary}}', discountSummaryHtml);
 
-        // Genel Toplamları Doldur
+        // Genel toplamları doldurma
         html = html.replace('{{subTotal}}', formatLira(order.total_amount));
         html = html.replace('{{paidAmount}}', formatLira(order.paid_amount));
         html = html.replace('{{totalAmount}}', formatLira(order.total_amount));
@@ -135,15 +134,16 @@ app.post('/api/generate/order', async (req, res) => {
     }
 });
 
-
-// GÜN SONU RAPORU API YOLU (Bu kodda değişiklik yok)
+// ==============================================================================
+// API YOLU: GÜN SONU RAPORU OLUŞTURMA
+// ==============================================================================
 app.post('/api/generate/day-end', async (req, res) => {
     try {
         const { report } = req.body;
         let html = fs.readFileSync(path.join(__dirname, 'day-end-template.html'), 'utf-8');
         const formatLira = (amount) => (amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
         
-        // GÜN SONU VERİLERİNİ DOLDURMA KISMI
+        // Gün sonu verilerini doldurma
         html = html.replace('{{cashierName}}', report.cashier.name || '');
         html = html.replace('{{targetCashierName}}', report.targetCashier?.name || 'Merkez');
         html = html.replace('{{reportDate}}', new Date(report.date).toLocaleDateString('tr-TR'));
@@ -176,7 +176,7 @@ app.post('/api/generate/day-end', async (req, res) => {
     }
 });
 
-// SUNUCUYU BAŞLAT
+// Sunucuyu başlatma
 app.listen(port, () => {
     console.log(`PDF servisi http://localhost:${port} adresinde çalışıyor`);
 });
