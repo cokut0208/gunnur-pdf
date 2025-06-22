@@ -70,17 +70,13 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{remainingAmount}}', formatLira(order.remaining_amount));
         html = html.replace('{{remainingPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method);
 
-        // HATA DÜZELTMESİ VE İSTENEN MANTIK BURADA
         // Veritabanından gelen 'details' JSON metnini okuyup verileri ayıklıyoruz.
         const itemsHtml = orderItems.map(item => {
             const product = item.product || {};
-            // 'details' objesini güvenli bir şekilde alıyoruz. Yoksa boş obje kullanılır.
-            const details = item.details || {}; 
-            
-            // Verileri 'details' objesinin içinden okuyoruz.
-            const color = details.selectedVariant?.color || '-';
-            const modelYear = details.selectedVariant?.modelYear || '-';
-            const chassis_number = details.chassis_number || 'N/A';
+            // Frontend'de 'details' objesi açıldığı için veriler artık doğrudan okunabilir.
+            const color = item.selectedVariant?.color || '-';
+            const modelYear = item.selectedVariant?.modelYear || '-';
+            const chassis_number = item.chassis_number || 'N/A';
         
             return `
                 <tr>
