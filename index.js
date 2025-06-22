@@ -74,22 +74,9 @@ app.post('/api/generate/order', async (req, res) => {
         // Veritabanından gelen 'details' JSON metnini okuyup verileri ayıklıyoruz.
         const itemsHtml = orderItems.map(item => {
             const product = item.product || {};
-            
-            let color = '-';
-            let modelYear = '-';
-            let chassis_number = item.chassis_number || 'N/A';
-        
-            if (item.details && typeof item.details === 'string') {
-                try {
-                    const detailsData = JSON.parse(item.details);
-                    const sv = detailsData.selectedVariant || {};
-                    if (sv.color) color = sv.color;
-                    if (sv.modelYear) modelYear = sv.modelYear;
-                    if (detailsData.chassis_number) chassis_number = detailsData.chassis_number;
-                } catch (e) {
-                    console.error('details parse edilemedi:', item.details);
-                }
-            }
+            const color = item.selectedVariant?.color || '-';
+            const modelYear = item.selectedVariant?.modelYear || '-';
+            const chassis_number = item.chassis_number || 'N/A';
         
             return `
                 <tr>
