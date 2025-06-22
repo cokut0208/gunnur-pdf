@@ -1,7 +1,5 @@
 const express = require('express');
-// DİKKAT: Artık 'puppeteer-core' kullanıyoruz
 const puppeteer = require('puppeteer-core');
-// DİKKAT: Render için özel Chrome paketini ekledik
 const chromium = require('@sparticuz/chromium');
 const cors = require('cors');
 const fs = require('fs');
@@ -13,13 +11,10 @@ const port = 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// PDF OLUŞTURMA İÇİN YARDIMCI FONKSİYON
-// Bu fonksiyon, HTML içeriğini alıp PDF'e dönüştürür.
+// TEKRAR EDEN PDF OLUŞTURMA İŞLEMİ İÇİN YARDIMCI FONKSİYON
 const createPdfFromHtml = async (htmlContent) => {
     let browser;
     try {
-        // Puppeteer'ı, Render.com için özel olarak kurduğumuz
-        // harici Chrome paketi ile başlatıyoruz. Bu, en stabil yöntemdir.
         browser = await puppeteer.launch({
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
@@ -32,79 +27,71 @@ const createPdfFromHtml = async (htmlContent) => {
         const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
         return pdfBuffer;
     } finally {
-        // İşlem bittiğinde veya hata oluştuğunda tarayıcıyı kapat.
         if (browser) {
             await browser.close();
         }
     }
 };
 
-// ==============================================================================
-// API YOLU 1: SİPARİŞ FORMU OLUŞTURMA (/api/generate/order)
-// ==============================================================================
+// SİPARİŞ FORMU OLUŞTURMA API YOLU
 app.post('/api/generate/order', async (req, res) => {
     try {
         const { order, customer, orderItems, logoBase64 } = req.body;
         let html = fs.readFileSync(path.join(__dirname, 'order-template.html'), 'utf-8');
 
+        const formatLira = (amount) => (amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+        const paymentMethods = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale', installment: 'Taksitli', credit: 'Kredili' };
+        const statusLabels = { draft: 'Taslak', confirmed: 'Onaylandı', completed: 'Tamamlandı', cancelled: 'İptal' };
+
         // --- ŞABLONDAKİ TÜM VERİLERİ DOLDUR ---
 
-        // Genel Bilgiler
         html = html.replace('{{logoBase64}}', logoBase64 || '');
-        html = html.replace('{{orderId}}', order.id.slice(0, 8) || 'Bilinmiyor');
+        html = html.replace('{{orderId}}', order.id.slice(0, 8) || '');
         html = html.replace('{{orderDate}}', new Date(order.order_date).toLocaleDateString('tr-TR'));
-
+        
         // Müşteri Bilgileri
-        html = html.replace('{{customerName}}', `${customer.first_name || ''} ${customer.last_name || ''}`);
+        html = html.replace(/{{customerName}}/g, `${customer.first_name || ''} ${customer.last_name || ''}`);
         html = html.replace('{{customerPhone}}', customer.phone || 'Belirtilmemiş');
         html = html.replace('{{customerEmail}}', customer.email || 'Belirtilmemiş');
         html = html.replace('{{customerTC}}', customer.tc_identity || 'Belirtilmemiş');
+        html = html.replace('{{customerTCSerial}}', customer.tc_serial || 'N/A'); // Yeni eklenen seri no
         html = html.replace('{{customerAddress}}', customer.address || 'Belirtilmemiş');
         
-        // Sipariş Detayları
-        html = html.replace('{{paymentMethod}}', order.payment_method || 'Belirtilmemiş');
-        html = html.replace('{{orderStatus}}', order.status || 'Belirtilmemiş');
-        html = html.replace('{{chassisNumber}}', order.chassis_number || 'N/A');
-        html = html.replace('{{notes}}', order.notes || 'Yok');
+        // Sipariş ve Ödeme Detayları
+        html = html.replace('{{orderStatus}}', statusLabels[order.status] || order.status);
+        html = html.replace('{{downPaymentAmount}}', formatLira(order.paid_amount)); // Peşinat ödenen tutardır
+        html = html.replace('{{downPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method); // Siparişin ana ödeme yöntemi peşinat yöntemi olarak kabul edilir
+        html = html.replace('{{remainingAmount}}', formatLira(order.remaining_amount));
+        html = html.replace('{{remainingPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method); // Bu alanı gerekirse frontend'den ayrı bir veri olarak alabilirsiniz. Şimdilik ana metodu kullanıyoruz.
+
 
         // Ürün Listesini HTML Tablo Satırlarına Çevir
         const itemsHtml = orderItems.map(item => {
             const product = item.product || {};
-            let variantsText = '';
-            if (product.variants) {
-                try {
-                    const variants = JSON.parse(product.variants);
-                    const colors = variants.colors ? `Renk: ${variants.colors.join(', ')}` : '';
-                    variantsText = colors;
-                } catch (e) { /* ignore */ }
-            }
+            // Seçilen varyantları (renk, yıl) birleştirerek tek bir string yap
+            const variantInfo = [item.selectedVariant.color, item.selectedVariant.modelYear].filter(Boolean).join(' / ');
 
             return `
                 <tr>
-                    <td>
-                        <strong>${product.name || ''}</strong><br>
-                        <small>Model: ${product.model || ''}</small>
-                    </td>
-                    <td><small>${variantsText}</small></td>
+                    <td>${product.name || ''} ${product.model || ''}</td>
+                    <td>${variantInfo || 'Standart'}</td>
+                    <td>${item.chassis_number || 'N/A'}</td>
                     <td style="text-align:center;">${item.quantity}</td>
-                    <td style="text-align:right;">₺${item.unit_price.toLocaleString('tr-TR')}</td>
-                    <td style="text-align:right;">₺${item.total_price.toLocaleString('tr-TR')}</td>
+                    <td style="text-align:right;">₺${formatLira(item.unit_price)}</td>
+                    <td style="text-align:right;">₺${formatLira(item.total_price)}</td>
                 </tr>
             `;
         }).join('');
         html = html.replace('{{orderItems}}', itemsHtml);
 
         // Ödeme Özeti
-        html = html.replace('{{subTotal}}', order.total_amount.toLocaleString('tr-TR'));
-        html = html.replace('{{paidAmount}}', order.paid_amount.toLocaleString('tr-TR'));
-        html = html.replace('{{remainingAmount}}', order.remaining_amount.toLocaleString('tr-TR'));
-        html = html.replace('{{totalAmount}}', order.total_amount.toLocaleString('tr-TR'));
+        html = html.replace('{{subTotal}}', formatLira(order.total_amount));
+        html = html.replace('{{paidAmount}}', formatLira(order.paid_amount));
+        html = html.replace('{{totalAmount}}', formatLira(order.total_amount));
         
-        // PDF'i oluştur
         const pdfBuffer = await createPdfFromHtml(html);
-        
-        // Oluşturulan PDF'i istemciye gönder
         res.set({ 'Content-Type': 'application/pdf', 'Content-Length': pdfBuffer.length }).send(pdfBuffer);
+
     } catch (error) {
         console.error('Sipariş PDF hatası:', error);
         res.status(500).send('Sipariş PDF oluşturulamadı. Sunucu loglarını kontrol edin.');
