@@ -75,6 +75,16 @@
             border-top: 1px solid #000;
             text-align: center;
         }
+
+        .discount-text {
+    font-size: 7pt;
+    font-style: italic;
+    color: #d9534f; /* Kırmızımsı bir renk */
+}
+.summary .discount-total td {
+    color: #d9534f;
+    font-weight: bold;
+}
     </style>
 </head>
 <body>
@@ -140,20 +150,22 @@
             </section>
             
             <section class="summary">
-                 <table>
-                     <tr>
-                         <td>Ara Toplam:</td>
-                         <td style="text-align:right;">₺{{subTotal}}</td>
-                     </tr>
-                     <tr>
-                         <td>Ödenen (Peşinat):</td>
-                         <td style="text-align:right;">₺{{paidAmount}}</td>
-                     </tr>
-                     <tr class="total">
-                         <td>GENEL TOPLAM:</td>
-                         <td style="text-align:right;">₺{{totalAmount}}</td>
-                     </tr>
-                 </table>
+                <table>
+                    {{discountSummary}}
+    
+                    <tr>
+                        <td>Ara Toplam:</td>
+                        <td style="text-align:right;">₺{{subTotal}}</td>
+                    </tr>
+                    <tr>
+                        <td>Ödenen (Peşinat):</td>
+                        <td style="text-align:right;">₺{{paidAmount}}</td>
+                    </tr>
+                    <tr class="total">
+                        <td>GENEL TOPLAM:</td>
+                        <td style="text-align:right;">₺{{totalAmount}}</td>
+                    </tr>
+                </table>
             </section>
         </div>
         

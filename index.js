@@ -43,7 +43,7 @@ const createPdfFromHtml = async (htmlContent) => {
 };
 
 // ==============================================================================
-// API YOLU 1: SİPARİŞ FORMU OLUŞTURMA (/api/generate/order)
+// API YOLU 1: SİPARİŞ FORMU OLUŞTURMA (/api/generate/order) - GÜNCELLENDİ
 // ==============================================================================
 app.post('/api/generate/order', async (req, res) => {
     try {
@@ -54,7 +54,11 @@ app.post('/api/generate/order', async (req, res) => {
         const paymentMethods = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale', installment: 'Taksitli', credit: 'Kredili' };
         const statusLabels = { draft: 'Taslak', confirmed: 'Onaylandı', completed: 'Tamamlandı', cancelled: 'İptal' };
 
-        // ŞABLONDAKİ TÜM VERİLERİ DOLDUR
+        // === YENİ: İNDİRİM HESAPLAMALARI ===
+        const totalOriginalAmount = orderItems.reduce((sum, item) => sum + (item.original_price * item.quantity), 0);
+        const totalDiscountAmount = orderItems.reduce((sum, item) => sum + (item.discount_amount * item.quantity), 0);
+        
+        // ŞABLONDAKİ GENEL VERİLERİ DOLDUR
         html = html.replace('{{logoBase64}}', logoBase64 || '');
         html = html.replace('{{orderId}}', order.id.slice(0, 8) || 'Bilinmiyor');
         html = html.replace('{{orderDate}}', new Date(order.order_date).toLocaleDateString('tr-TR'));
@@ -68,19 +72,29 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{downPaymentAmount}}', formatLira(order.paid_amount));
         html = html.replace('{{downPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method);
         html = html.replace('{{remainingAmount}}', formatLira(order.remaining_amount));
+        // NOT: Kalan tutar ödeme yöntemi için 'order' objesinde ayrı bir alan olmalı.
+        // Şimdilik peşinat yöntemiyle aynı kullanılıyor.
         html = html.replace('{{remainingPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method);
 
-        // Veritabanından gelen 'details' JSON metnini okuyup verileri ayıklıyoruz.
+        // === YENİ: ÜRÜN LİSTESİNİ İNDİRİM BİLGİSİYLE OLUŞTUR ===
         const itemsHtml = orderItems.map(item => {
             const product = item.product || {};
-            // Frontend'de 'details' objesi açıldığı için veriler artık doğrudan okunabilir.
-            const color = item.selectedVariant?.color || '-';
-            const modelYear = item.selectedVariant?.modelYear || '-';
-            const chassis_number = item.chassis_number || 'N/A';
-        
+            const details = (item as any).details || {}; 
+            const color = details.selectedVariant?.color || '-';
+            const modelYear = details.selectedVariant?.modelYear || '-';
+            const chassis_number = details.chassis_number || 'N/A';
+            
+            // İndirim uygulanmışsa, bunu belirtmek için ek bir satır oluştur
+            const discountInfoHtml = item.discount_amount > 0 
+                ? `<br><span class="discount-text">(Orijinal Fiyat: ₺${formatLira(item.original_price)}, İndirim: -₺${formatLira(item.discount_amount)})</span>`
+                : '';
+
             return `
                 <tr>
-                    <td>${product.name || ''} ${product.model || ''}</td>
+                    <td>
+                        ${product.name || ''} ${product.model || ''}
+                        ${discountInfoHtml}
+                    </td>
                     <td>${color}</td>
                     <td>${modelYear}</td>
                     <td>${chassis_number}</td>
@@ -92,7 +106,23 @@ app.post('/api/generate/order', async (req, res) => {
         }).join('');
         html = html.replace('{{orderItems}}', itemsHtml);
 
-        // Ödeme Özeti
+        // === YENİ: ÖDEME ÖZETİNİ İNDİRİM BİLGİSİYLE OLUŞTUR ===
+        let discountSummaryHtml = '';
+        if (totalDiscountAmount > 0) {
+            discountSummaryHtml = `
+                <tr>
+                    <td>Orijinal Toplam:</td>
+                    <td style="text-align:right;">₺${formatLira(totalOriginalAmount)}</td>
+                </tr>
+                <tr class="discount-total">
+                    <td>Toplam İndirim:</td>
+                    <td style="text-align:right;">-₺${formatLira(totalDiscountAmount)}</td>
+                </tr>
+            `;
+        }
+        html = html.replace('{{discountSummary}}', discountSummaryHtml);
+
+        // Genel Toplamları Doldur
         html = html.replace('{{subTotal}}', formatLira(order.total_amount));
         html = html.replace('{{paidAmount}}', formatLira(order.paid_amount));
         html = html.replace('{{totalAmount}}', formatLira(order.total_amount));
