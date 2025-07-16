@@ -50,10 +50,6 @@ app.post('/api/generate/order', async (req, res) => {
         const formatLira = (amount) => (amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const statusLabels = { draft: 'Taslak', confirmed: 'Onaylandı', completed: 'Tamamlandı', cancelled: 'İptal' };
 
-        // Toplamları doğrudan sipariş kalemlerinden hesapla
-        const subTotal = orderItems.reduce((sum, item) => sum + (item.original_price || 0) * (item.quantity || 1), 0);
-        const totalDiscount = orderItems.reduce((sum, item) => sum + (item.discount_amount || 0) * (item.quantity || 1), 0);
-        
         // Genel verileri doldur
         html = html.replace('{{logoBase64}}', logoBase64 || '');
         html = html.replace('{{orderId}}', order.id.slice(0, 8) || 'Bilinmiyor');
@@ -65,40 +61,39 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{customerTCSerial}}', customer.tc_serial || 'N/A');
         html = html.replace('{{customerAddress}}', customer.address || 'Belirtilmemiş');
         html = html.replace('{{orderStatus}}', statusLabels[order.status] || order.status);
-
+        
         // Sipariş kalemleri HTML'ini oluştur
         const itemsHtml = orderItems.map(item => {
-            const product_name = item.product_name || 'Bilinmeyen Ürün';
-            const color = item.selectedVariant?.color || '-';
-            const modelYear = item.selectedVariant?.modelYear || '-';
-            const chassis_number = item.chassis_number || 'N/A';
-            
             const discountDescription = item.manual_discount_description 
-                ? `Manuel İndirim: ${item.manual_discount_description}` 
-                : item.discount_name || '';
+                ? `(${item.manual_discount_description})`
+                : item.discount_name ? `(${item.discount_name})` : '';
 
             const discountInfoHtml = (item.discount_amount || 0) > 0 
-                ? `<br><span class="discount-text">(İndirim: -₺${formatLira(item.discount_amount)} ${discountDescription ? ` - ${discountDescription}` : ''})</span>`
+                ? `<br><span class="discount-text">İndirim: -₺${formatLira(item.discount_amount)} ${discountDescription}</span>`
                 : '';
-
+                
             return `
                 <tr>
-                    <td>${product_name} ${discountInfoHtml}</td>
-                    <td>${color} / ${modelYear}</td>
+                    <td>
+                        ${item.product_name || 'Bilinmeyen Ürün'}
+                        ${discountInfoHtml}
+                    </td>
+                    <td>${item.color || '-'} / ${item.modelYear || '-'}</td>
                     <td style="text-align:center;">${item.quantity}</td>
                     <td style="text-align:right;">₺${formatLira(item.unit_price)}</td>
                     <td style="text-align:right;">₺${formatLira(item.total_price)}</td>
                 </tr>
                 <tr>
-                    <td colspan="5" style="font-size: 7pt; padding-top:0; border-bottom: 1px solid #ddd;"><strong>Şasi No:</strong> ${chassis_number}</td>
+                    <td colspan="5" style="font-size: 7pt; padding-top:0; border-bottom: 1px solid #ddd;"><strong>Şasi No:</strong> ${item.chassis_number}</td>
                 </tr>`;
         }).join('');
         html = html.replace('{{orderItems}}', itemsHtml);
 
         // Ödeme detayları HTML'ini oluştur
+        const paymentMethodLabels = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale/EFT' };
         const paymentDetailsHtml = (paymentItems || []).map(p => `
             <tr>
-                <td>${p.method} ${p.bank ? `(${p.bank.name})` : ''}</td>
+                <td>${paymentMethodLabels[p.method] || p.method} ${p.bank ? `(${p.bank.name})` : ''}</td>
                 <td>${p.description || '-'}</td>
                 <td style="text-align:right;">₺${formatLira(p.amount)}</td>
             </tr>
@@ -106,6 +101,9 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{paymentDetailsHtml}}', paymentDetailsHtml);
         
         // Özet bölümünü doldur
+        const subTotal = orderItems.reduce((sum, item) => sum + (item.original_price || 0) * (item.quantity || 1), 0);
+        const totalDiscount = orderItems.reduce((sum, item) => sum + (item.discount_amount || 0) * (item.quantity || 1), 0);
+        
         let discountSummaryHtml = '';
         if (totalDiscount > 0) {
             discountSummaryHtml = `
@@ -132,7 +130,6 @@ app.post('/api/generate/order', async (req, res) => {
         res.status(500).send('Sipariş PDF oluşturulamadı.');
     }
 });
-
 
 app.listen(port, () => {
     console.log(`PDF servisi http://localhost:${port} adresinde çalışıyor`);
