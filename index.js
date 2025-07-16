@@ -42,23 +42,19 @@ const createPdfFromHtml = async (htmlContent) => {
     }
 };
 
-// ==============================================================================
-// API YOLU: SİPARİŞ FORMU OLUŞTURMA
-// ==============================================================================
 app.post('/api/generate/order', async (req, res) => {
     try {
-        const { order, customer, orderItems, logoBase64 } = req.body;
+        const { order, customer, orderItems, paymentItems, logoBase64 } = req.body;
         let html = fs.readFileSync(path.join(__dirname, 'order-template.html'), 'utf-8');
 
-        const formatLira = (amount) => (amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
-        const paymentMethods = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale', installment: 'Taksitli', credit: 'Kredili' };
+        const formatLira = (amount) => (amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const statusLabels = { draft: 'Taslak', confirmed: 'Onaylandı', completed: 'Tamamlandı', cancelled: 'İptal' };
 
-        // İndirim ve orijinal tutar hesaplamaları
-        const totalOriginalAmount = orderItems.reduce((sum, item) => sum + ((item.original_price || 0) * (item.quantity || 1)), 0);
-        const totalDiscountAmount = orderItems.reduce((sum, item) => sum + ((item.discount_amount || 0) * (item.quantity || 1)), 0);
+        // Toplamları doğrudan sipariş kalemlerinden hesapla
+        const subTotal = orderItems.reduce((sum, item) => sum + (item.original_price || 0) * (item.quantity || 1), 0);
+        const totalDiscount = orderItems.reduce((sum, item) => sum + (item.discount_amount || 0) * (item.quantity || 1), 0);
         
-        // Şablondaki genel verileri doldurma
+        // Genel verileri doldur
         html = html.replace('{{logoBase64}}', logoBase64 || '');
         html = html.replace('{{orderId}}', order.id.slice(0, 8) || 'Bilinmiyor');
         html = html.replace('{{orderDate}}', new Date(order.order_date).toLocaleDateString('tr-TR'));
@@ -69,114 +65,75 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{customerTCSerial}}', customer.tc_serial || 'N/A');
         html = html.replace('{{customerAddress}}', customer.address || 'Belirtilmemiş');
         html = html.replace('{{orderStatus}}', statusLabels[order.status] || order.status);
-        html = html.replace('{{downPaymentAmount}}', formatLira(order.paid_amount));
-        html = html.replace('{{downPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method);
-        html = html.replace('{{remainingAmount}}', formatLira(order.remaining_amount));
-        html = html.replace('{{remainingPaymentMethod}}', paymentMethods[order.payment_method] || order.payment_method);
 
-        // Sipariş kalemleri için HTML oluşturma
+        // Sipariş kalemleri HTML'ini oluştur
         const itemsHtml = orderItems.map(item => {
-            const product = item.product || {};
-            const details = item.details || {};
-            const selectedVariant = details.selectedVariant || {};
-
-            const color = selectedVariant.color || '-';
-            const modelYear = selectedVariant.modelYear || '-';
-            const chassis_number = details.chassis_number || 'N/A';
+            const product_name = item.product_name || 'Bilinmeyen Ürün';
+            const color = item.selectedVariant?.color || '-';
+            const modelYear = item.selectedVariant?.modelYear || '-';
+            const chassis_number = item.chassis_number || 'N/A';
             
-            const discountInfoHtml = item.discount_amount > 0 
-                ? `<br><span class="discount-text">(Orijinal Fiyat: ₺${formatLira(item.original_price)}, İndirim: -₺${formatLira(item.discount_amount)})</span>`
+            const discountDescription = item.manual_discount_description 
+                ? `Manuel İndirim: ${item.manual_discount_description}` 
+                : item.discount_name || '';
+
+            const discountInfoHtml = (item.discount_amount || 0) > 0 
+                ? `<br><span class="discount-text">(İndirim: -₺${formatLira(item.discount_amount)} ${discountDescription ? ` - ${discountDescription}` : ''})</span>`
                 : '';
 
             return `
                 <tr>
-                    <td>
-                        ${product.name || ''} ${product.model || ''}
-                        ${discountInfoHtml}
-                    </td>
-                    <td>${color}</td>
-                    <td>${modelYear}</td>
-                    <td>${chassis_number}</td>
+                    <td>${product_name} ${discountInfoHtml}</td>
+                    <td>${color} / ${modelYear}</td>
                     <td style="text-align:center;">${item.quantity}</td>
                     <td style="text-align:right;">₺${formatLira(item.unit_price)}</td>
                     <td style="text-align:right;">₺${formatLira(item.total_price)}</td>
                 </tr>
-            `;
+                <tr>
+                    <td colspan="5" style="font-size: 7pt; padding-top:0; border-bottom: 1px solid #ddd;"><strong>Şasi No:</strong> ${chassis_number}</td>
+                </tr>`;
         }).join('');
         html = html.replace('{{orderItems}}', itemsHtml);
 
-        // Ödeme özeti için indirim HTML'ini oluşturma
+        // Ödeme detayları HTML'ini oluştur
+        const paymentDetailsHtml = (paymentItems || []).map(p => `
+            <tr>
+                <td>${p.method} ${p.bank ? `(${p.bank.name})` : ''}</td>
+                <td>${p.description || '-'}</td>
+                <td style="text-align:right;">₺${formatLira(p.amount)}</td>
+            </tr>
+        `).join('');
+        html = html.replace('{{paymentDetailsHtml}}', paymentDetailsHtml);
+        
+        // Özet bölümünü doldur
         let discountSummaryHtml = '';
-        if (totalDiscountAmount > 0) {
+        if (totalDiscount > 0) {
             discountSummaryHtml = `
                 <tr>
                     <td>Orijinal Toplam:</td>
-                    <td style="text-align:right;">₺${formatLira(totalOriginalAmount)}</td>
+                    <td style="text-align:right;">₺${formatLira(subTotal)}</td>
                 </tr>
                 <tr class="discount-total">
                     <td>Toplam İndirim:</td>
-                    <td style="text-align:right;">-₺${formatLira(totalDiscountAmount)}</td>
+                    <td style="text-align:right;">-₺${formatLira(totalDiscount)}</td>
                 </tr>
             `;
         }
         html = html.replace('{{discountSummary}}', discountSummaryHtml);
-
-        // Genel toplamları doldurma
-        html = html.replace('{{subTotal}}', formatLira(order.total_amount));
-        html = html.replace('{{paidAmount}}', formatLira(order.paid_amount));
+        html = html.replace('{{subTotal}}', formatLira(subTotal));
         html = html.replace('{{totalAmount}}', formatLira(order.total_amount));
+        html = html.replace('{{paidAmount}}', formatLira(order.paid_amount));
+        html = html.replace('{{remainingAmount}}', formatLira(order.remaining_amount));
         
         const pdfBuffer = await createPdfFromHtml(html);
         res.set({ 'Content-Type': 'application/pdf', 'Content-Length': pdfBuffer.length }).send(pdfBuffer);
     } catch (error) {
         console.error('Sipariş PDF hatası:', error);
-        res.status(500).send('Sipariş PDF oluşturulamadı. Sunucu loglarını kontrol edin.');
+        res.status(500).send('Sipariş PDF oluşturulamadı.');
     }
 });
 
-// ==============================================================================
-// API YOLU: GÜN SONU RAPORU OLUŞTURMA
-// ==============================================================================
-app.post('/api/generate/day-end', async (req, res) => {
-    try {
-        const { report } = req.body;
-        let html = fs.readFileSync(path.join(__dirname, 'day-end-template.html'), 'utf-8');
-        const formatLira = (amount) => (amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
-        
-        // Gün sonu verilerini doldurma
-        html = html.replace('{{cashierName}}', report.cashier.name || '');
-        html = html.replace('{{targetCashierName}}', report.targetCashier?.name || 'Merkez');
-        html = html.replace('{{reportDate}}', new Date(report.date).toLocaleDateString('tr-TR'));
-        html = html.replace('{{openingBalance}}', formatLira(report.openingBalance));
-        html = html.replace('{{netAmount}}', formatLira(report.netAmount));
-        html = html.replace('{{transferredAmount}}', formatLira(report.transferredAmount));
-        html = html.replace('{{closingBalance}}', formatLira(report.closingBalance));
-        html = html.replace('{{totalIncome}}', formatLira(report.totalIncome));
-        html = html.replace('{{cashIncome}}', formatLira(report.cashTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)));
-        html = html.replace('{{cardIncome}}', formatLira(report.cardTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)));
-        html = html.replace('{{transferIncome}}', formatLira(report.transferTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)));
-        html = html.replace('{{totalExpense}}', formatLira(report.totalExpense));
-        html = html.replace('{{cashExpense}}', formatLira(report.cashTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)));
-        html = html.replace('{{cardExpense}}', formatLira(report.cardTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)));
-        html = html.replace('{{transferExpense}}', formatLira(report.transferTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)));
-        const totalTransactions = report.cashTransactions.length + report.cardTransactions.length + report.transferTransactions.length;
-        const avgTransactionAmount = totalTransactions > 0 ? (report.totalIncome + report.totalExpense) / totalTransactions : 0;
-        const maxIncome = Math.max(...[...report.cashTransactions, ...report.cardTransactions, ...report.transferTransactions].filter(t => t.type === 'income').map(t => t.amount), 0);
-        html = html.replace('{{totalTransactions}}', totalTransactions);
-        html = html.replace('{{orderCount}}', report.orderCount);
-        html = html.replace('{{avgTransactionAmount}}', formatLira(avgTransactionAmount));
-        html = html.replace('{{maxIncome}}', formatLira(maxIncome));
-        html = html.replace('{{generationDate}}', new Date().toLocaleString('tr-TR'));
 
-        const pdfBuffer = await createPdfFromHtml(html);
-        res.set({ 'Content-Type': 'application/pdf', 'Content-Length': pdfBuffer.length }).send(pdfBuffer);
-    } catch (error) {
-        console.error('Gün sonu PDF hatası:', error);
-        res.status(500).send('Gün sonu PDF oluşturulamadı. Sunucu loglarını kontrol edin.');
-    }
-});
-
-// Sunucuyu başlatma
 app.listen(port, () => {
     console.log(`PDF servisi http://localhost:${port} adresinde çalışıyor`);
 });
