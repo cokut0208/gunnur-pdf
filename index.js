@@ -49,6 +49,7 @@ app.post('/api/generate/order', async (req, res) => {
 
         const formatLira = (amount) => (amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const statusLabels = { draft: 'Taslak', confirmed: 'Onaylandı', completed: 'Tamamlandı', cancelled: 'İptal' };
+        const paymentMethodLabels = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale/EFT', installment: 'Taksitli', credit: 'Kredili' };
 
         // Genel verileri doldur
         html = html.replace('{{logoBase64}}', logoBase64 || '');
@@ -90,10 +91,9 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{orderItems}}', itemsHtml);
 
         // Ödeme detayları HTML'ini oluştur
-        const paymentMethodLabels = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale/EFT' };
         const paymentDetailsHtml = (paymentItems || []).map(p => `
             <tr>
-                <td>${paymentMethodLabels[p.method] || p.method} ${p.bank ? `(${p.bank.name})` : ''}</td>
+                <td>${paymentMethodLabels[p.payment_method] || p.payment_method} ${p.bank ? `(${p.bank.name})` : ''}</td>
                 <td>${p.description || '-'}</td>
                 <td style="text-align:right;">₺${formatLira(p.amount)}</td>
             </tr>
@@ -107,10 +107,6 @@ app.post('/api/generate/order', async (req, res) => {
         let discountSummaryHtml = '';
         if (totalDiscount > 0) {
             discountSummaryHtml = `
-                <tr>
-                    <td>Orijinal Toplam:</td>
-                    <td style="text-align:right;">₺${formatLira(subTotal)}</td>
-                </tr>
                 <tr class="discount-total">
                     <td>Toplam İndirim:</td>
                     <td style="text-align:right;">-₺${formatLira(totalDiscount)}</td>

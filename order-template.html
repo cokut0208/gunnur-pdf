@@ -88,19 +88,6 @@
                 </table>
             </section>
             
-            <div class="summary-container">
-                <div class="summary">
-                    <table>
-                        <tbody>
-                            <tr><td>Ara Toplam:</td><td style="text-align:right;">₺{{subTotal}}</td></tr>
-                            {{discountSummary}}
-                            <tr class="total"><td>Genel Toplam:</td><td style="text-align:right;">₺{{totalAmount}}</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div style="clear:both;"></div>
-
             <section class="table-container" style="margin-top: 20px;">
                 <h3>ÖDEME DETAYLARI</h3>
                 <table>
@@ -126,6 +113,19 @@
                     </tfoot>
                 </table>
             </section>
+            
+            <div class="summary-container">
+                <div class="summary">
+                    <table>
+                        <tbody>
+                            <tr><td>Ara Toplam:</td><td style="text-align:right;">₺{{subTotal}}</td></tr>
+                            {{discountSummary}}
+                            <tr class="total"><td>Genel Toplam:</td><td style="text-align:right;">₺{{totalAmount}}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div style="clear:both;"></div>
         </div>
         
         <footer class="footer">
