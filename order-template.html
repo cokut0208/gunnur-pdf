@@ -16,20 +16,20 @@
         .page-container {
             width: 210mm;
             min-height: 297mm; /* A4 boyutu */
-            padding: 20mm;
+            padding: 15mm; /* GÜNCELLENDİ: Kenar boşluğunu biraz azalttık */
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
         }
         .content-wrapper {
-            flex-grow: 1; /* içeriğin büyümesini sağlar */
+            flex-grow: 1; 
         }
         .header {
             display: grid;
             grid-template-columns: 1fr 1fr;
             border-bottom: 2px solid #333;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
+            padding-bottom: 8px; /* GÜNCELLENDİ */
+            margin-bottom: 12px; /* GÜNCELLENDİ */
         }
         .header .logo {
             width: 150px;
@@ -48,7 +48,7 @@
         }
         .title {
             text-align: center;
-            margin-bottom: 15px;
+            margin-bottom: 12px; /* GÜNCELLENDİ */
         }
         .title h2 {
             font-size: 20pt;
@@ -56,24 +56,24 @@
         }
         .info-section {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* GÜNCELLENDİ */
-            gap: 20px;
-            margin-bottom: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px; /* GÜNCELLENDİ */
+            margin-bottom: 12px; /* GÜNCELLENDİ */
             font-size: 9pt;
         }
         .info-box {
             border: 1px solid #ccc;
             border-radius: 8px;
-            padding: 12px;
+            padding: 10px; /* GÜNCELLENDİ */
         }
         .info-box h3 {
             font-size: 11pt;
-            margin: 0 0 10px;
+            margin: 0 0 8px; /* GÜNCELLENDİ */
             border-bottom: 1px solid #ccc;
-            padding-bottom: 5px;
+            padding-bottom: 4px; /* GÜNCELLENDİ */
         }
         .info-box p {
-            margin: 0 0 6px;
+            margin: 0 0 5px; /* GÜNCELLENDİ */
         }
         .trade-in-box {
             border-color: #f0ad4e;
@@ -84,7 +84,7 @@
         }
         .table-container h3 {
             font-size: 11pt;
-            margin-bottom: 10px;
+            margin-bottom: 8px; /* GÜNCELLENDİ */
         }
         table {
             width: 100%;
@@ -93,7 +93,7 @@
         }
         th, td {
             text-align: left;
-            padding: 6px 8px;
+            padding: 5px 8px; /* GÜNCELLENDİ */
             border-bottom: 1px solid #ddd;
         }
         thead {
@@ -105,7 +105,7 @@
         .summary-container {
             display: flex;
             justify-content: flex-end;
-            margin-top: 15px;
+            margin-top: 12px; /* GÜNCELLENDİ */
         }
         .summary {
             width: 45%;
@@ -130,25 +130,25 @@
             font-weight: bold;
         }
         .footer {
-            margin-top: auto;
-            padding-top: 20mm;
+            margin-top: auto; 
+            padding-top: 15mm; /* GÜNCELLENDİ: İmza alanının üst boşluğunu azalttık */
             font-size: 9pt;
         }
         .terms {
             font-size: 8pt;
             font-style: italic;
             color: #555;
-            margin-bottom: 20px;
+            margin-bottom: 15px; /* GÜNCELLENDİ */
             text-align: center;
             border: 1px dashed #ccc;
-            padding: 10px;
+            padding: 8px; /* GÜNCELLENDİ */
             border-radius: 5px;
         }
         .signatures {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 60px;
-            padding-top: 20px;
+            padding-top: 15px; /* GÜNCELLENDİ */
         }
         .signatures div {
             padding-top: 40px;
@@ -211,7 +211,7 @@
                 </table>
             </section>
             
-            <section class="table-container" style="margin-top: 20px;">
+            <section class="table-container" style="margin-top: 15px;">
                 <h3>ÖDEME DETAYLARI</h3>
                 <table>
                     <thead>
