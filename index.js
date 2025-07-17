@@ -61,13 +61,16 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{customerAddress}}', customer.address || 'Belirtilmemiş');
         html = html.replace('{{orderStatus}}', statusLabels[order.status] || order.status);
 
+        // Takas aracını buluyoruz. Frontend'den gelen 'used_vehicle' objesini arıyoruz.
         const tradeInPayment = (paymentItems || []).find(p => p.payment_method === 'swap' && p.used_vehicle);
         const tradeInVehicle = tradeInPayment ? tradeInPayment.used_vehicle : null;
         
         let tradeInSectionHtml = '';
         if (tradeInVehicle) {
+            // Takas aracı varsa, bu HTML bloğunu oluşturuyoruz.
+            // style="grid-column: 1 / -1;" eklemesi, bu bölümün her zaman tam genişlikte yer almasını sağlar.
             tradeInSectionHtml = `
-            <div class="info-box trade-in-box">
+            <div class="info-box trade-in-box" style="grid-column: 1 / -1;">
                 <h3>TAKAS ARAÇ BİLGİLERİ</h3>
                 <p><strong>Ruhsat Sahibi:</strong> ${tradeInVehicle.owner_name || ''}</p>
                 <p><strong>Plaka:</strong> ${tradeInVehicle.license_plate || ''}</p>
