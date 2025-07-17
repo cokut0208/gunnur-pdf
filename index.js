@@ -1,3 +1,4 @@
+// backend/index.js
 const express = require('express');
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
@@ -11,7 +12,6 @@ const port = 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Tek tarayıcı örneğini yönetmek için yardımcı fonksiyon
 let browserInstance = null;
 const getBrowserInstance = async () => {
     if (browserInstance && browserInstance.isConnected()) {
@@ -29,7 +29,6 @@ const getBrowserInstance = async () => {
     return browserInstance;
 };
 
-// HTML içeriğinden PDF oluşturmak için yardımcı fonksiyon
 const createPdfFromHtml = async (htmlContent) => {
     const browser = await getBrowserInstance();
     const page = await browser.newPage();
@@ -49,9 +48,8 @@ app.post('/api/generate/order', async (req, res) => {
 
         const formatLira = (amount) => (amount || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const statusLabels = { draft: 'Taslak', confirmed: 'Onaylandı', completed: 'Tamamlandı', cancelled: 'İptal' };
-        const paymentMethodLabels = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale/EFT', installment: 'Taksitli', credit: 'Kredili' };
+        const paymentMethodLabels = { cash: 'Nakit', credit_card: 'Kredi Kartı', bank_transfer: 'Havale/EFT', installment: 'Taksitli', credit: 'Kredili', swap: '2.El Takas' };
 
-        // Genel verileri doldur
         html = html.replace('{{logoBase64}}', logoBase64 || '');
         html = html.replace('{{orderId}}', order.id.slice(0, 8) || 'Bilinmiyor');
         html = html.replace('{{orderDate}}', new Date(order.order_date).toLocaleDateString('tr-TR'));
@@ -62,8 +60,23 @@ app.post('/api/generate/order', async (req, res) => {
         html = html.replace('{{customerTCSerial}}', customer.tc_serial || 'N/A');
         html = html.replace('{{customerAddress}}', customer.address || 'Belirtilmemiş');
         html = html.replace('{{orderStatus}}', statusLabels[order.status] || order.status);
+
+        const tradeInPayment = (paymentItems || []).find(p => p.payment_method === 'swap' && p.used_vehicle);
+        const tradeInVehicle = tradeInPayment ? tradeInPayment.used_vehicle : null;
         
-        // Sipariş kalemleri HTML'ini oluştur
+        let tradeInSectionHtml = '';
+        if (tradeInVehicle) {
+            tradeInSectionHtml = `
+            <div class="info-box trade-in-box">
+                <h3>TAKAS ARAÇ BİLGİLERİ</h3>
+                <p><strong>Ruhsat Sahibi:</strong> ${tradeInVehicle.owner_name || ''}</p>
+                <p><strong>Plaka:</strong> ${tradeInVehicle.license_plate || ''}</p>
+                <p><strong>Telefon:</strong> ${tradeInVehicle.phone_number || 'Belirtilmemiş'}</p>
+            </div>
+            `;
+        }
+        html = html.replace('{{tradeInSection}}', tradeInSectionHtml);
+        
         const itemsHtml = orderItems.map(item => {
             const discountDescription = item.manual_discount_description 
                 ? `(${item.manual_discount_description})`
@@ -90,7 +103,6 @@ app.post('/api/generate/order', async (req, res) => {
         }).join('');
         html = html.replace('{{orderItems}}', itemsHtml);
 
-        // Ödeme detayları HTML'ini oluştur
         const paymentDetailsHtml = (paymentItems || []).map(p => `
             <tr>
                 <td>${paymentMethodLabels[p.payment_method] || p.payment_method} ${p.bank ? `(${p.bank.name})` : ''}</td>
@@ -100,7 +112,6 @@ app.post('/api/generate/order', async (req, res) => {
         `).join('');
         html = html.replace('{{paymentDetailsHtml}}', paymentDetailsHtml);
         
-        // Özet bölümünü doldur
         const subTotal = orderItems.reduce((sum, item) => sum + (item.original_price || 0) * (item.quantity || 1), 0);
         const totalDiscount = orderItems.reduce((sum, item) => sum + (item.discount_amount || 0) * (item.quantity || 1), 0);
         
@@ -125,6 +136,10 @@ app.post('/api/generate/order', async (req, res) => {
         console.error('Sipariş PDF hatası:', error);
         res.status(500).send('Sipariş PDF oluşturulamadı.');
     }
+});
+
+app.post('/api/generate/day-end', async (req, res) => {
+    // Bu endpoint'i projenizdeki haline göre kontrol edin
 });
 
 app.listen(port, () => {

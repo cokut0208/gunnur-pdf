@@ -75,6 +75,13 @@
         .info-box p {
             margin: 0 0 6px;
         }
+        .trade-in-box {
+            border-color: #f0ad4e;
+            background-color: #fcf8e3;
+        }
+        .trade-in-box h3 {
+            color: #8a6d3b;
+        }
         .table-container h3 {
             font-size: 11pt;
             margin-bottom: 10px;
@@ -123,7 +130,7 @@
             font-weight: bold;
         }
         .footer {
-            margin-top: auto; /* Alt bilgiyi en alta iter */
+            margin-top: auto;
             padding-top: 20mm;
             font-size: 9pt;
         }
@@ -181,6 +188,9 @@
                     <p><strong>Sipariş Tarihi:</strong> {{orderDate}}</p>
                     <p><strong>Sipariş Durumu:</strong> {{orderStatus}}</p>
                 </div>
+                
+                {{tradeInSection}}
+
             </section>
             
             <section class="table-container">
